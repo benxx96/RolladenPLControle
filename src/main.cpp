@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include <SoftwareSerial.h>
+#include <ArduinoJson.h>
 
 // Define
 #define RX_PIN 10   // Virtual Reciever Pin
@@ -8,6 +9,8 @@
 
 // Variable
 SoftwareSerial mySerial(RX_PIN, TX_PIN); // RX, TX
+StaticJsonDocument<256> jsonDoc;
+StaticJsonDocument<256> jsonDoc2;
 
 struct Data 
 {
@@ -15,32 +18,12 @@ struct Data
   String content = ""; 
 };
 
-Data getDataOfString(String raw_data_str, String identifier = "**", int id = 1){
-  Data data;
-
-  String data_str = "";
-  String data_str1 = "";
-  String data_str2 = "";
-
-  data_str = raw_data_str.substring(raw_data_str.indexOf(strstr(raw_data_str.c_str(), identifier.c_str()))+2, raw_data_str.indexOf(strstr(raw_data_str.c_str(), "$$")));
-  data_str1 = data_str.substring(0, data_str.indexOf(';'));
-  data_str2 = data_str.substring(data_str.indexOf(';')+1, data_str.length());
-
-  int id_ist = data_str1.substring(data_str1.indexOf(':')+1).toInt();
-  if(id_ist == id){
-    data.id = id_ist;
-    data.content = data_str2.substring(data_str2.indexOf(':')+1);
-  }
-
-  return data;
-}
-
 void setup() {
   Serial.begin(115200);
   mySerial.begin(9600);
 }
 
-void serialWrite(int id){
+void serialWrite(int id, String content){
   // noInterrupts();
   Data data;
   data.id = id;
@@ -49,13 +32,10 @@ void serialWrite(int id){
   // begin-marker
   mySerial.print("**");
   
-  // content
-  mySerial.print("id:");
-  mySerial.print(data.id);
-  mySerial.print(";");
+  jsonDoc["id"] = id;
+  jsonDoc["content"] = content;
 
-  mySerial.print("content:");
-  mySerial.print(data.content);
+  serializeJson(jsonDoc, mySerial);
 
   // end-marker
   mySerial.print("$$");
@@ -63,6 +43,7 @@ void serialWrite(int id){
 
 void serialRead(){
   String raw_data_str = "";
+  String data_str = "";
   Data data;
 
   mySerial.listen();
@@ -75,7 +56,13 @@ void serialRead(){
       // Serial.write(inByte);
       raw_data_str += inByte;
     }
-    data = getDataOfString(raw_data_str);
+
+    data_str = raw_data_str.substring(raw_data_str.indexOf("**")+2, raw_data_str.indexOf("$$"));
+    deserializeJson(jsonDoc, data_str);
+
+    data.id = jsonDoc["id"];
+    String content = jsonDoc["content"];
+    data.content = content;
 
     if(data.id == 1){
       Serial.println("Data from mySerial:");
@@ -87,7 +74,7 @@ void serialRead(){
 }
 
 void loop() {
-  // serialWrite(1);
+  // serialWrite(1, "move");
   serialRead();
   delay(1000);
 }
