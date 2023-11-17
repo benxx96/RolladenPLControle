@@ -15,56 +15,79 @@ struct Data
   String content = ""; 
 };
 
+Data getDataOfString(String raw_data_str, String identifier = "**", int id = 1){
+  Data data;
+
+  String data_str = "";
+  String data_str1 = "";
+  String data_str2 = "";
+
+  data_str = raw_data_str.substring(raw_data_str.indexOf(strstr(raw_data_str.c_str(), identifier.c_str()))+2, raw_data_str.indexOf(strstr(raw_data_str.c_str(), "$$")));
+  data_str1 = data_str.substring(0, data_str.indexOf(';'));
+  data_str2 = data_str.substring(data_str.indexOf(';')+1, data_str.length());
+
+  int id_ist = data_str1.substring(data_str1.indexOf(':')+1).toInt();
+  if(id_ist == id){
+    data.id = id_ist;
+    data.content = data_str2.substring(data_str2.indexOf(':')+1);
+  }
+
+  return data;
+}
+
 void setup() {
   Serial.begin(115200);
   mySerial.begin(9600);
 }
 
-void serialWrite(){
+void serialWrite(int id){
   // noInterrupts();
   Data data;
-  data.id = 1;
-  data.content = "test";
+  data.id = id;
+  data.content = "data";
 
-  if (mySerial.available()){
-    // begin-marker
-    mySerial.print("**");
-    
-    // content
-    mySerial.print("id:");
-    mySerial.print(data.id);
-    mySerial.print(";");
+  // begin-marker
+  mySerial.print("**");
+  
+  // content
+  mySerial.print("id:");
+  mySerial.print(data.id);
+  mySerial.print(";");
 
-    mySerial.print("content:");
-    mySerial.print(data.content);
+  mySerial.print("content:");
+  mySerial.print(data.content);
 
-    // end-marker
-    mySerial.print("$$");
-  }
+  // end-marker
+  mySerial.print("$$");
 }
 
 void serialRead(){
   String raw_data_str = "";
-  String data_str = "";
+  Data data;
 
   mySerial.listen();
   // while there is data coming in, read it
   // and send to the hardware serial port:
   if(mySerial.available() > 0){
-    Serial.println("Data from mySerial:");
+    // Serial.println("Data from mySerial:");
     while (mySerial.available() > 0) {
       char inByte = mySerial.read();
       // Serial.write(inByte);
       raw_data_str += inByte;
     }
-    data_str = raw_data_str.substring(raw_data_str.indexOf('*')+2, raw_data_str.indexOf('$'));
-    Serial.println(data_str);
-    Serial.println();
+    data = getDataOfString(raw_data_str);
+
+    if(data.id == 1){
+      Serial.println("Data from mySerial:");
+      Serial.println(data.id);
+      Serial.println(data.content);
+      Serial.println();
+    }
   }
 }
 
 void loop() {
-  // serialWrite();
+  // serialWrite(1);
   serialRead();
-  delay(800);
+  delay(1000);
 }
