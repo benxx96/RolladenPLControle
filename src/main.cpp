@@ -1,7 +1,6 @@
 #include <Arduino.h>
 
 #include <SoftwareSerial.h>
-#include <ArduinoJson.h>
 
 // Define
 #define RX_PIN 10   // Virtual Reciever Pin
@@ -10,22 +9,17 @@
 #define LED_PIN 9
 
 
-#define DEVICE_ID 100
-
 // Variable
 bool sender = false;
 bool isSendingData = false;
-bool hasRecievedData = false;
-unsigned int sendCounter = 0;
+bool hasSendedData = false;
+bool hasReceivedData = false;
+unsigned long sendTimer = 0;
+unsigned long sendTimerLength = 2000;
+
 
 // Objects
 SoftwareSerial mySerial(RX_PIN, TX_PIN); // RX, TX
-StaticJsonDocument<256> jsonDoc;
-
-struct Data {
-  unsigned int id = -1;
-  String content = ""; 
-};
 
 void setup() {
   Serial.begin(115200);
@@ -35,120 +29,97 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
 }
 
-void serialWrite(unsigned int id, String content){
-  // noInterrupts();
-  Data data;
-  data.id = id;
-  data.content = "data";
-
-  // begin-marker
+void serialWrite(char id, char id2, char action, char received){
+  // Device, Device, Action, received
+  delay(50);
   mySerial.print("**");
-  
-  jsonDoc["id"] = id;
-  jsonDoc["content"] = content;
-
-  serializeJson(jsonDoc, mySerial);
-
-  // end-marker
+  mySerial.print(id);
+  mySerial.print(id2);
+  mySerial.print(action);
+  mySerial.print(received);
   mySerial.print("$$");
+  delay(50);
 }
 
-Data serialRead(unsigned int id){
-  String raw_data_str = "";
-  Data data;
+String serialRead(){
+  String data = "";
 
+  mySerial.flush();
   mySerial.listen();
   // while there is data coming in, read it
   // and send to the hardware serial port:
-  if(mySerial.available() > 0){
-    bool startMarker = false;
-    bool stopMarker = false;
-
-    char inByte = mySerial.read();
-    Serial.print(inByte);
-    if(inByte == '*'){
-      delay(0);
-      char inByte2 = mySerial.read();
-      if(inByte2 == '*'){
-        startMarker = true;
-        delay(0);
-      }
-    }
-    
-    while(startMarker && !stopMarker && mySerial.available() > 0){
-      char inByte = mySerial.read();
-      if(inByte == '$'){
-        delay(0);
-        char inByte2 = mySerial.read();
-        if(inByte2 == '$'){
-          delay(0);
-          stopMarker = true;
-        }
+  char inByte = (char)mySerial.read();
+  if(inByte == '*' && mySerial.available() > 6){
+    for(int i=0; i<6; i++){
+      inByte = (char)mySerial.read();
+      if((int)inByte >= 0 && (int)inByte <= 127){
+        data += inByte;
       }
       else{
-        raw_data_str += inByte;
-        Serial.print(raw_data_str);
+        i--;
       }
+      if(inByte == '$'){break;}
     }
   }
-  deserializeJson(jsonDoc, raw_data_str);
-  data.id = jsonDoc["id"];
-  String content = jsonDoc["content"];
-  data.content = content;
-  if(data.id == id && raw_data_str.length() > 3){
-    return data;
-  }
-  else{
-    data.id = 0;
-    data.content = "";
-    return data;
-  }
+  delay(100);
+  return data;
 }
 
 void loop() {
-  Data data;
-
   if(sender){
     if(digitalRead(8) == HIGH){
       isSendingData = true;
-      sendCounter = 0;
+      hasSendedData = false;
+      hasReceivedData = false;
     }
 
-    if(isSendingData && sendCounter < 6){
-      digitalWrite(LED_PIN, HIGH);
-      serialWrite(1, "move");
-      Serial.println("send Data");
-      sendCounter++;
-      
-      delay(5000);
-    }
-    else{
-      digitalWrite(LED_PIN, LOW);
-    }
+    if(millis() > sendTimerLength + sendTimer){
+      if(isSendingData && !hasSendedData && !hasReceivedData){
+        digitalWrite(LED_PIN, HIGH);
+        serialWrite('0', '1', '1', '0');
+        isSendingData = false;
+        hasSendedData = true;
+        Serial.println("send");
+      }
+      else if(!isSendingData && hasSendedData && !hasReceivedData){
+        String data;
+        char code[] = "*0111$";
+        data = serialRead();
+        if (strcmp(data.c_str(), code) == 0){
+          hasSendedData = false;
+          hasReceivedData = true;
+          digitalWrite(LED_PIN, LOW);
+        }
+        else{
+          isSendingData = true;
+          hasSendedData = false;
+          hasReceivedData = false;
+        }
+      }
+      sendTimer = millis();
+    } 
   }
   else{
-    data = serialRead(1);
+    if(millis() > sendTimerLength + sendTimer){
+      String data;
 
-    if(data.id != 0){
-      int switchCase = 0;
-      if (data.content == "move"){switchCase = 1;}
+      if(!hasReceivedData && !isSendingData){
+        char code[] = "*0110$";
+        data = serialRead();
+        if (strcmp(data.c_str(), code) == 0){
+          hasReceivedData = true;
+          isSendingData = true;
 
-      switch (switchCase)
-      {
-      case 1: // move
-        Serial.println(data.id);
-        Serial.println(data.content);
-        Serial.println();
-        break;
-      
-      default:
-        Serial.println("no Data!");
-        break;
+          Serial.println(data);
+        }
       }
-    }
-    if(mySerial.available() > 15){
-      Serial.print((char)mySerial.read());
-    }
-    delay(2000);
+      else if(hasReceivedData && isSendingData){
+        serialWrite('0', '1', '1', '1');
+        hasReceivedData = false;
+        isSendingData = false;
+      }
+      sendTimer = millis();
+    } 
   }
+  delay(50);
 }
