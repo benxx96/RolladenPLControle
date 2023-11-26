@@ -19,7 +19,7 @@ bool hasReceivedData = false;
 unsigned long receiveTimer = 0;
 unsigned long receiveTimerLength = 200;
 unsigned long sendTimer = 0;
-unsigned long sendTimerLength = 5000;
+unsigned long sendTimerLength = 10000;
 
 
 // Objects
@@ -60,7 +60,7 @@ String serialRead(){
     while(mySerial.available() < 7){
       delay(100);
       Serial.print(".");
-      if(i>500){break;}
+      if(i>100){break;}
       i++;
     }
     for(int i=0; i<6; i++){
@@ -119,6 +119,7 @@ void loop() {
         // Serial.println("receiving");
       }
       else if(sendData && isSendingData && !hasReceivedData){
+        delay(2000);
         digitalWrite(LED_PIN, HIGH);
         serialWrite('0', '1', '1', '0');
         isSendingData = false;
@@ -151,7 +152,8 @@ void loop() {
         }
       }
       else if(isSendingData){
-        for(int i=0; i<20; i++){
+        delay(2000);
+        for(int i=0; i<5; i++){
           serialWrite('0', '1', '1', '1');
           isSendingData = false;
           Serial.println("sending");
